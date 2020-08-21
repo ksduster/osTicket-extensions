@@ -26,23 +26,24 @@ SOFTWARE.
 Parts of this script were inspired from jared@osTicket.com / ntozier@osTicket / tmib.net (http://tmib.net/using-osticket-1812-api)
 */
 
-$settings = array(
+$config = array(
   'dbHost' => 'localhost',
-  'dbTable' => 'ost.ost_faq', // Database.Table where FAQs are stored.
-  'dbUser' => 'root',
-  'dbPass' => '',
-  'categoryId' => 16, // The Category ID where Automator tickete FAQs are kept
-  'topicId' => 8, // Created tickets are assigned to this topic.
+  'dbName' => 'dbname', //name of database where table is located
+  'dbTable' => 'dbname.ost_faq', // Database.Table where FAQs are stored.
+  'dbUser' => 'useracct',
+  'dbPass' => 'mysqlpassword',
+  'categoryId' => '2', // The Category ID where Automator tickete FAQs are kept
+  'topicId' => '10', // Created tickets are assigned to this topic.
   'subjectPrefix' => '[',
   'subjectSuffix' => ']',
-  'reporterEmail' => 'automator@domain.com',
-  'reporterName' => 'Automator',
-  'apiURL' => 'http://ost.domain.com/api/http.php/tickets.json',
-  'apiKey' => 'your-api-key'
+  'reporterEmail' => 'user@domain.com',
+  'reporterName' => 'username',
+  'apiURL' => 'http://domain.com/api/http.php/tickets.json',
+  'apiKey' => 'your api key here'
 );
 
-if (!isset($settings)) {
-  die ('$settings is not set. Aborting.');
+if (!isset($config)) {
+  die ('$config is not set. Aborting.');
 }
 
 $period = isset($argv[1]) ? $argv[1] : "daily";
@@ -57,22 +58,22 @@ foreach($tks as $t) {
 
 // $period to match FAQ Question field.
 function findTicketsToCreate($period = "daily") {  
-    global $settings;
+    global $config;
     
-    $link = mysql_connect($settings['dbHost'], $settings['dbUser'], $settings['dbPass']);
+    $link = mysqli_connect($config['dbHost'], $config['dbUser'], $config['dbPass'], $config['dbName']);
 
     if (!$link) {
-        die('Could not connect: ' . mysql_error());
+        die('Could not connect: ' . mysqli_error());
     }
     
-    $sql_query = "select faq_id, answer from " . $settings['dbTable'] . " WHERE category_id=" . $settings['categoryId'] . " AND UPPER(question) LIKE UPPER('%$period%')";
-    
-    $sql_result = mysql_query($sql_query, $link);
+    $sql_query = "select faq_id, answer from " . $config['dbTable'] . " WHERE category_id=" . $config['categoryId'] . " AND UPPER(question) LIKE UPPER('%$period%')";
+    // The above line is searching but not returning properly causing a empty ticket to be created
+    $sql_result = mysqli_query($sql_query, $link);
     
     $rowsFound = false;
     $results = array();
     
-    while ($row = mysql_fetch_array($sql_result,MYSQL_ASSOC)) {
+    while ($row = mysqli_fetch_array($sql_result,'MYSQLI_ASSOC')) {
       $rowsFound = true;
     
       $lines = explode("\n", trim(br2nl($row['answer']))) ;
@@ -108,8 +109,8 @@ function findTicketsToCreate($period = "daily") {
       }
     }
     
-    mysql_free_result($sql_result);
-    mysql_close($link);
+    mysqli_free_result($sql_result);
+    mysqli_close($link);
 
     if (!$rowsFound) {
       $msg = "Automator called for Period '$period' but found no tickets to create";
@@ -122,11 +123,11 @@ function findTicketsToCreate($period = "daily") {
 
 
 function createTicket($subject, $message = null) {
-  global $settings;
+  global $config;
 
-  $topicId = $settings['topicId']; 
-  $reporterEmail = $settings['reporterEmail'];
-  $reporterName = $settings['reporterName'];
+  $topicId = $config['topicId']; 
+  $reporterEmail = $config['reporterEmail'];
+  $reporterName = $config['reporterName'];
   $reporterIP = gethostbyname(gethostname());
 
   if (empty($subject)) {
@@ -138,7 +139,7 @@ function createTicket($subject, $message = null) {
     $message = $subject;
   }
 
-  $subject = $settings['subjectPrefix'] . $subject . $settings['subjectSuffix'];
+  $subject = $config['subjectPrefix'] . $subject . $config['subjectSuffix'];
 
   $data = array(
     'name'      =>      $reporterName, 
@@ -156,12 +157,12 @@ function createTicket($subject, $message = null) {
   set_time_limit(30);
   
   $ch = curl_init();
-  curl_setopt($ch, CURLOPT_URL, $settings['apiURL']);
+  curl_setopt($ch, CURLOPT_URL, $config['apiURL']);
   curl_setopt($ch, CURLOPT_POST, 1);
   curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
   curl_setopt($ch, CURLOPT_USERAGENT, 'osTicket API Client v1.8');
   curl_setopt($ch, CURLOPT_HEADER, FALSE);
-  curl_setopt($ch, CURLOPT_HTTPHEADER, array( 'Expect:', 'X-API-Key: '.$settings['apiKey']));
+  curl_setopt($ch, CURLOPT_HTTPHEADER, array( 'Expect:', 'X-API-Key: '.$config['apiKey']));
   curl_setopt($ch, CURLOPT_FOLLOWLOCATION, FALSE);
   curl_setopt($ch, CURLOPT_RETURNTRANSFER, TRUE);
   $result=curl_exec($ch);
